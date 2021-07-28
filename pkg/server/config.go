@@ -11,10 +11,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 package server
 
 import (
 	"fmt"
+	"k8s.io/client-go/tools/cache"
 	"net/http"
 	"time"
 
@@ -58,7 +60,20 @@ func (c Config) Complete() (*server, error) {
 		return nil, fmt.Errorf("unable to construct a client to connect to the kubelets: %v", err)
 	}
 	nodes := informer.Core().V1().Nodes()
-	scrape := scraper.NewScraper(nodes.Lister(), kubeletClient, c.ScrapeTimeout)
+	store := storage.NewStorage(c.MetricResolution)
+	manageNodeScrape := scraper.NewManageNodeScraper(kubeletClient, c.ScrapeTimeout, c.MetricResolution, store)
+	nodes.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: func(node interface{}) {
+			manageNodeScrape.AddNodeScraper(node.(*corev1.Node))
+		},
+		//UpdateFunc: func(oldNode, newNode interface{}) {
+		//	go manageNodeScrape.UpdateNodeScraper(newNode.(*corev1.Node))
+		//},
+		DeleteFunc: func(node interface{}) {
+			manageNodeScrape.DeleteNodeScraper(node.(*corev1.Node))
+		},
+	})
+	//scrape := scraper.NewScraper(nodes.Lister(), kubeletClient, c.ScrapeTimeout)
 
 	// Disable default metrics handler and create custom one
 	c.Apiserver.EnableMetrics = false
@@ -72,7 +87,6 @@ func (c Config) Complete() (*server, error) {
 	}
 	genericServer.Handler.NonGoRestfulMux.HandleFunc("/metrics", metricsHandler)
 
-	store := storage.NewStorage(c.MetricResolution)
 	if err := api.Install(store, &podMetadataLister{podInformer.Lister()}, nodes.Lister(), genericServer); err != nil {
 		return nil, err
 	}
@@ -82,7 +96,7 @@ func (c Config) Complete() (*server, error) {
 		podInformer.Informer(),
 		genericServer,
 		store,
-		scrape,
+		//scrape,
 		c.MetricResolution,
 	)
 	err = s.RegisterProbes(podInformerFactory)

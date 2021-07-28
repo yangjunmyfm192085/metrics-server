@@ -36,7 +36,7 @@ type storage struct {
 var _ Storage = (*storage)(nil)
 
 func NewStorage(metricResolution time.Duration) *storage {
-	return &storage{pods: podStorage{metricResolution: metricResolution}}
+	return &storage{nodes: nodeStorage{metricResolution: metricResolution}, pods: podStorage{metricResolution: metricResolution}}
 }
 
 // Ready returns true if metrics-server's storage has accumulated enough metric

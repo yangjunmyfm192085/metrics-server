@@ -87,8 +87,8 @@ func (s *podStorage) GetMetrics(pods ...apitypes.NamespacedName) ([]api.TimeInfo
 }
 
 func (s *podStorage) Store(newPods *MetricsBatch) {
-	lastPods := make(map[apitypes.NamespacedName]PodMetricsPoint, len(newPods.Pods))
-	prevPods := make(map[apitypes.NamespacedName]PodMetricsPoint, len(newPods.Pods))
+	lastPods := make(map[apitypes.NamespacedName]PodMetricsPoint, len(newPods.Pods)+len(s.last))
+	prevPods := make(map[apitypes.NamespacedName]PodMetricsPoint, len(newPods.Pods)+len(s.last))
 	var containerCount int
 	for podRef, newPod := range newPods.Pods {
 		podRef := apitypes.NamespacedName{Name: podRef.Name, Namespace: podRef.Namespace}
@@ -141,6 +141,27 @@ func (s *podStorage) Store(newPods *MetricsBatch) {
 		// Only count containers for which metrics can be returned.
 		containerCount += containerPoints
 	}
+	newTimeStamp := time.Now()
+	for podRef, oldPod := range s.last {
+		oldPodKeep := true
+		if _, found := lastPods[podRef]; found {
+			continue
+		} else {
+			for _, container := range oldPod.Containers {
+				if container.Timestamp.After(newTimeStamp) || newTimeStamp.Sub(container.Timestamp) > 3*s.metricResolution {
+					oldPodKeep = false
+					break
+				}
+			}
+			if oldPodKeep {
+				lastPods[podRef] = s.last[podRef]
+				if _, exits := s.prev[podRef]; exits {
+					prevPods[podRef] = s.prev[podRef]
+				}
+			}
+		}
+	}
+
 	s.last = lastPods
 	s.prev = prevPods
 

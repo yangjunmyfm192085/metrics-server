@@ -11,7 +11,10 @@ require (
 	github.com/prometheus/common v0.25.0
 	github.com/spf13/cobra v1.1.3
 	github.com/spf13/pflag v1.0.5
+	go.uber.org/goleak v1.1.10
+	golang.org/x/lint v0.0.0-20210508222113-6edffad5e616 // indirect
 	golang.org/x/perf v0.0.0-20210220033136-40a54f11e909
+	golang.org/x/tools v0.1.5 // indirect
 	k8s.io/api v0.21.1
 	k8s.io/apimachinery v0.21.1
 	k8s.io/apiserver v0.21.1

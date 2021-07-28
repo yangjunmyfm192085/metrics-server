@@ -18,6 +18,7 @@ package storage
 import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
+	"time"
 
 	"sigs.k8s.io/metrics-server/pkg/api"
 )
@@ -33,6 +34,8 @@ type nodeStorage struct {
 	// prev stores node metric points from scrape preceding the last one.
 	// Points timestamp should proceed the corresponding points from last and have same start time (no restart between them).
 	prev map[string]MetricsPoint
+	//scrape period of metrics server
+	metricResolution time.Duration
 }
 
 func (s *nodeStorage) GetMetrics(nodes ...string) ([]api.TimeInfo, []corev1.ResourceList, error) {
@@ -60,8 +63,8 @@ func (s *nodeStorage) GetMetrics(nodes ...string) ([]api.TimeInfo, []corev1.Reso
 }
 
 func (s *nodeStorage) Store(batch *MetricsBatch) {
-	lastNodes := make(map[string]MetricsPoint, len(batch.Nodes))
-	prevNodes := make(map[string]MetricsPoint, len(batch.Nodes))
+	lastNodes := make(map[string]MetricsPoint, len(batch.Nodes)+len(s.last))
+	prevNodes := make(map[string]MetricsPoint, len(batch.Nodes)+len(s.last))
 	for nodeName, newPoint := range batch.Nodes {
 		if _, exists := lastNodes[nodeName]; exists {
 			klog.ErrorS(nil, "Got duplicate node point", "node", klog.KRef("", nodeName))
@@ -88,9 +91,21 @@ func (s *nodeStorage) Store(batch *MetricsBatch) {
 			}
 		}
 	}
+	newTimeStamp := time.Now()
+	for nodeName, _ := range s.last {
+		if _, found := lastNodes[nodeName]; found {
+			continue
+		} else {
+			if newTimeStamp.After(s.last[nodeName].Timestamp) && newTimeStamp.Sub(s.last[nodeName].Timestamp) < 3*s.metricResolution {
+				lastNodes[nodeName] = s.last[nodeName]
+				if _, exists := s.prev[nodeName]; exists {
+					prevNodes[nodeName] = s.prev[nodeName]
+				}
+			}
+		}
+	}
 	s.last = lastNodes
 	s.prev = prevNodes
-
 	// Only count last for which metrics can be returned.
 	pointsStored.WithLabelValues("node").Set(float64(len(prevNodes)))
 }
