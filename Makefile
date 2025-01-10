@@ -30,7 +30,7 @@ ALL_BINARIES_PLATFORMS= $(addprefix linux/,$(ALL_ARCHITECTURES)) \
 
 # Tools versions
 # --------------
-GOLANGCI_VERSION:=1.61.0
+GOLANGCI_VERSION:=1.63.4
 
 # Computed variables
 # ------------------
